@@ -16,16 +16,12 @@ settings = get_settings()
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator:
     """Application lifespan manager"""
-    # Startup
     print("Starting ToxZone Backend...")
-    await init_db()
+    init_db()
     print("Database initialized")
-
     yield
-
-    # Shutdown
     print("Shutting down ToxZone Backend...")
-    await close_db()
+    close_db()
     print("Database connection closed")
 
 
@@ -38,7 +34,6 @@ def create_app() -> FastAPI:
         lifespan=lifespan,
     )
 
-    # CORS middleware
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.cors_origins_list,
@@ -47,7 +42,6 @@ def create_app() -> FastAPI:
         allow_headers=["*"],
     )
 
-    # Include routers
     from .api import chemicals, facilities, scenarios, calculations
 
     app.include_router(chemicals.router, prefix="/api/v1/chemicals", tags=["Chemicals"])
@@ -55,7 +49,6 @@ def create_app() -> FastAPI:
     app.include_router(scenarios.router, prefix="/api/v1/scenarios", tags=["Scenarios"])
     app.include_router(calculations.router, prefix="/api/v1/calculations", tags=["Calculations"])
 
-    # Health check
     @app.get("/health")
     async def health_check():
         return {"status": "healthy", "version": "0.1.0"}

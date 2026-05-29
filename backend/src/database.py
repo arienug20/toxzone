@@ -1,15 +1,12 @@
-"""Database connection and session management"""
+"""Database connection and session management - SQLite"""
 
-from typing import AsyncGenerator
+from typing import Generator
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker, DeclarativeBase, Session
 
-from sqlalchemy.ext.asyncio import (
-    AsyncSession,
-    async_sessionmaker,
-    create_async_engine,
-)
-from sqlalchemy.orm import DeclarativeBase
+from .config import get_settings
 
-from .config import settings
+settings = get_settings()
 
 
 class Base(DeclarativeBase):
@@ -17,45 +14,36 @@ class Base(DeclarativeBase):
     pass
 
 
-# Create async engine
-engine = create_async_engine(
-    settings.database_url,
+# Create sync engine (SQLite)
+engine = create_engine(
+    settings.database_url.replace("+aiosqlite", "").replace("postgresql+asyncpg", "sqlite"),
     echo=settings.debug,
-    pool_pre_ping=True,
-    pool_size=10,
-    max_overflow=20,
+    connect_args={"check_same_thread": False},
 )
 
-# Create async session factory
-async_session_maker = async_sessionmaker(
-    engine,
-    class_=AsyncSession,
-    expire_on_commit=False,
-)
+# Create session factory
+SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 
-async def get_db() -> AsyncGenerator[AsyncSession, None]:
-    """Dependency for getting async database sessions"""
-    async with async_session_maker() as session:
-        try:
-            yield session
-            await session.commit()
-        except Exception:
-            await session.rollback()
-            raise
-        finally:
-            await session.close()
+def get_db() -> Generator[Session, None, None]:
+    """Dependency for getting database sessions"""
+    db = SessionLocal()
+    try:
+        yield db
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
+    finally:
+        db.close()
 
 
-async def init_db() -> None:
+def init_db() -> None:
     """Initialize database - create all tables"""
-    async with engine.begin() as conn:
-        # Import all models here to ensure they're registered with Base
-        from .models import chemical, facility, scenario, result  # noqa
-
-        await conn.run_sync(Base.metadata.create_all)
+    from .models import chemical, facility, scenario, result  # noqa
+    Base.metadata.create_all(bind=engine)
 
 
-async def close_db() -> None:
+def close_db() -> None:
     """Close database connection"""
-    await engine.dispose()
+    engine.dispose()

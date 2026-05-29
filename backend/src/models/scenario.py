@@ -1,22 +1,16 @@
-"""Scenario SQLAlchemy models"""
+"""Scenario SQLAlchemy models - SQLite compatible"""
 
-from typing import Optional
 from datetime import datetime
 import uuid
 
-from sqlalchemy import (
-    Boolean,
-    Column,
-    DateTime,
-    Float,
-    ForeignKey,
-    String,
-    CheckConstraint,
-)
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy import Column, DateTime, Float, String, Boolean, ForeignKey
 from sqlalchemy.orm import relationship
 
-from ...database import Base
+from src.database import Base
+
+
+def generate_uuid():
+    return str(uuid.uuid4())
 
 
 class WeatherPreset(Base):
@@ -24,9 +18,9 @@ class WeatherPreset(Base):
 
     __tablename__ = "weather_presets"
 
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    id = Column(String(36), primary_key=True, default=generate_uuid)
     name = Column(String(100), nullable=False, unique=True)
-    stability_class = Column(String(5), nullable=False)  # A-F
+    stability_class = Column(String(5), nullable=False)
     wind_speed_ms = Column(Float, nullable=False)
     wind_direction_deg = Column(Float, default=0)
     temperature_c = Column(Float, default=25)
@@ -35,23 +29,18 @@ class WeatherPreset(Base):
     inversion_height_m = Column(Float)
     is_builtin = Column(Boolean, default=False)
 
-    __table_args__ = (
-        CheckConstraint("stability_class IN ('A','B','C','D','E','F')", name="check_stability_class"),
-    )
-
 
 class EmergencyScenario(Base):
     """Emergency release scenarios"""
 
     __tablename__ = "emergency_scenarios"
 
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    facility_id = Column(UUID(as_uuid=True), ForeignKey("facilities.id", ondelete="CASCADE"), nullable=False)
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    facility_id = Column(String(36), ForeignKey("facilities.id", ondelete="CASCADE"), nullable=False)
     name = Column(String(255), nullable=False)
     chemical_cas = Column(String(20), ForeignKey("chemicals.cas_number"), nullable=False)
 
-    # Release parameters
-    scenario_type = Column(String(50), nullable=False)  # continuous, instantaneous, time_varying, pool_evaporation, catastrophic
+    scenario_type = Column(String(50), nullable=False)
     release_rate_kg_s = Column(Float)
     total_release_kg = Column(Float)
     duration_s = Column(Float)
@@ -61,14 +50,12 @@ class EmergencyScenario(Base):
     hole_diameter_m = Column(Float)
     discharge_coefficient = Column(Float, default=0.61)
 
-    # Mitigation
     secondary_containment = Column(Boolean, default=False)
     bund_area_m2 = Column(Float)
     water_spray = Column(Boolean, default=False)
     mitigation_factor = Column(Float, default=1.0)
 
-    # Weather
-    weather_preset_id = Column(UUID(as_uuid=True), ForeignKey("weather_presets.id"))
+    weather_preset_id = Column(String(36), ForeignKey("weather_presets.id"))
     stability_class = Column(String(5))
     wind_speed_ms = Column(Float)
     wind_direction_deg = Column(Float)
@@ -76,17 +63,13 @@ class EmergencyScenario(Base):
     humidity_percent = Column(Float, default=50)
     surface_roughness_m = Column(Float, default=0.03)
 
-    # Scenario classification
-    scenario_category = Column(String(50))  # worst_case, alternative, what_if, regulatory
-
-    # Computation
-    model_override = Column(String(50))  # gaussian, heavy_gas, auto
+    scenario_category = Column(String(50))
+    model_override = Column(String(50))
     grid_resolution_m = Column(Float, default=5)
 
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
-    # Relationships
     facility = relationship("Facility", back_populates="scenarios")
     chemical = relationship("Chemical", back_populates="scenarios")
-    results = relationship("EPZResult", back_populates="scenario", cascade="all, delete-orphan")
+    results = relationship("EPZResultDB", back_populates="scenario", cascade="all, delete-orphan")

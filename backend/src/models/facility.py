@@ -1,24 +1,17 @@
-"""Facility SQLAlchemy models"""
+"""Facility SQLAlchemy models - SQLite compatible"""
 
-from typing import Optional
 from datetime import datetime
 import uuid
+import json
 
-from sqlalchemy import (
-    Column,
-    DateTime,
-    Float,
-    ForeignKey,
-    Index,
-    Integer,
-    String,
-    Text,
-    CheckConstraint,
-)
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy import Column, DateTime, Float, String, Text, Boolean, Integer, ForeignKey, Index
 from sqlalchemy.orm import relationship
 
-from ...database import Base
+from src.database import Base
+
+
+def generate_uuid():
+    return str(uuid.uuid4())
 
 
 class Facility(Base):
@@ -26,7 +19,7 @@ class Facility(Base):
 
     __tablename__ = "facilities"
 
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    id = Column(String(36), primary_key=True, default=generate_uuid)
     name = Column(String(255), nullable=False, index=True)
     owner = Column(String(255))
     facility_type = Column(String(100))
@@ -46,16 +39,9 @@ class Facility(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
-    # Relationships
     chemicals = relationship("FacilityChemical", back_populates="facility", cascade="all, delete-orphan")
     scenarios = relationship("EmergencyScenario", back_populates="facility", cascade="all, delete-orphan")
     vulnerable_facilities = relationship("VulnerableFacility", back_populates="facility", cascade="all, delete-orphan")
-
-    __table_args__ = (
-        CheckConstraint("latitude BETWEEN -90 AND 90", name="check_latitude_range"),
-        CheckConstraint("longitude BETWEEN -180 AND 180", name="check_longitude_range"),
-        Index("idx_facilities_location", "latitude", "longitude"),
-    )
 
 
 class FacilityChemical(Base):
@@ -63,23 +49,18 @@ class FacilityChemical(Base):
 
     __tablename__ = "facility_chemicals"
 
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    facility_id = Column(UUID(as_uuid=True), ForeignKey("facilities.id", ondelete="CASCADE"), nullable=False)
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    facility_id = Column(String(36), ForeignKey("facilities.id", ondelete="CASCADE"), nullable=False)
     chemical_cas = Column(String(20), ForeignKey("chemicals.cas_number"), nullable=False)
     max_inventory_kg = Column(Float, nullable=False)
     typical_quantity_kg = Column(Float)
-    storage_condition = Column(String(50))  # ambient, refrigerated, pressurized, cryogenic
-    containment_type = Column(String(50))  # above_ground_tank, underground_tank, cylinder, drum, ibc, pipeline, railcar, isotainer
+    storage_condition = Column(String(50))
+    containment_type = Column(String(50))
     storage_location_desc = Column(Text)
     last_updated = Column(DateTime, default=datetime.utcnow)
 
-    # Relationships
     facility = relationship("Facility", back_populates="chemicals")
     chemical = relationship("Chemical", back_populates="facility_chemicals")
-
-    __table_args__ = (
-        CheckConstraint("max_inventory_kg > 0", name="check_max_inventory_positive"),
-    )
 
 
 class VulnerableFacility(Base):
@@ -87,10 +68,10 @@ class VulnerableFacility(Base):
 
     __tablename__ = "vulnerable_facilities"
 
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    facility_id = Column(UUID(as_uuid=True), ForeignKey("facilities.id", ondelete="CASCADE"), nullable=False)
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    facility_id = Column(String(36), ForeignKey("facilities.id", ondelete="CASCADE"), nullable=False)
     name = Column(String(255), nullable=False)
-    type = Column(String(50))  # school, hospital, nursing_home, residential, daycare, mosque, church, market
+    type = Column(String(50))
     latitude = Column(Float, nullable=False)
     longitude = Column(Float, nullable=False)
     estimated_occupancy = Column(Integer)
@@ -98,10 +79,4 @@ class VulnerableFacility(Base):
     bearing_deg = Column(Float)
     notes = Column(Text)
 
-    # Relationships
     facility = relationship("Facility", back_populates="vulnerable_facilities")
-
-    __table_args__ = (
-        CheckConstraint("latitude BETWEEN -90 AND 90", name="check_vuln_latitude_range"),
-        CheckConstraint("longitude BETWEEN -180 AND 180", name="check_vuln_longitude_range"),
-    )
